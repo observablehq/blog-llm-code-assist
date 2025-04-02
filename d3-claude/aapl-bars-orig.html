@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Closing Prices by Quarter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        .bar {
+            fill: steelblue;
+            transition: fill 0.3s;
+        }
+        .bar:hover {
+            fill: #ff7f0e;
+        }
+        .axis-label {
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .chart-title {
+            font-size: 16px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+        .grid line {
+            stroke: lightgrey;
+            stroke-opacity: 0.7;
+            shape-rendering: crispEdges;
+        }
+        .grid path {
+            stroke-width: 0;
+        }
+        .year-divider {
+            stroke: #999;
+            stroke-width: 1;
+            stroke-dasharray: 5,5;
+        }
+        .year-label {
+            font-size: 14px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart"></div>
+
+    <script>
+        // Set the dimensions and margins of the graph
+        const margin = {top: 60, right: 40, bottom: 80, left: 70};
+        const width = 1000 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        // Parse the date / time
+        const parseDate = d3.timeParse("%Y-%m-%d");
+
+        // Append the svg object to the body of the page
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Data from the CSV file (this will be expanded with sample data for multiple years)
+        const csvData = `Date,Open,High,Low,Close,Adj Close,Volume
+2013-05-13,64.501427,65.414284,64.5,64.96286,50.961628,79237200
+2013-05-14,64.835716,65.028572,63.164288,63.408573,49.742329,111779500
+2013-05-15,62.737144,63,60.337143,61.264286,48.060188,185403400
+2013-05-16,60.462856,62.549999,59.842857,62.082859,48.702328,150801000
+2013-05-17,62.721428,62.869999,61.572857,61.894287,48.554409,106976100
+2013-05-20,61.701427,63.685715,61.442856,63.275715,49.638096,112894600
+2013-05-21,62.592857,63.639999,62.028572,62.808571,49.271629,114005500
+2013-05-22,63.435715,64.050003,62.602856,63.049999,49.461025,110759600
+2013-05-23,62.278572,63.737144,62.255714,63.162857,49.549564,88255300
+2013-05-24,62.978573,63.665714,62.908573,63.592857,49.886887,69041700
+2013-05-28,64.271431,64.444283,62.978573,63.062859,49.471127,96536300`;
+
+        // Parse the initial data
+        const initialData = d3.csvParse(csvData);
+        
+        // Create sample data spanning multiple years and quarters
+        const sampleData = [];
+        
+        // Add the original data
+        initialData.forEach(d => {
+            sampleData.push({
+                Date: d.Date,
+                Close: d.Close
+            });
+        });
+        
+        // Generate additional sample data for other years and quarters
+        // This demonstrates how the chart would handle multiple years
+        const years = [2013, 2014, 2015, 2016];
+        const quarters = [1, 2, 3, 4];
+        
+        years.forEach(year => {
+            quarters.forEach(quarter => {
+                // Skip 2013-Q2 as we already have real data for that period
+                if (year === 2013 && quarter === 2) return;
+                
+                // Get the first month of the quarter
+                const firstMonth = (quarter - 1) * 3;
+                
+                // Generate 3-5 random data points for this quarter
+                const numPoints = Math.floor(Math.random() * 3) + 3;
+                
+                for (let i = 0; i < numPoints; i++) {
+                    // Random day within the quarter
+                    const month = firstMonth + Math.floor(Math.random() * 3);
+                    const day = Math.floor(Math.random() * 28) + 1;
+                    
+                    // Date string
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    
+                    // Base the random close value on the original data range (60-65)
+                    // but add some yearly trend and variance
+                    const yearFactor = (year - 2013) * 8;
+                    const randomClose = (60 + Math.random() * 5 + yearFactor).toFixed(6);
+                    
+                    sampleData.push({
+                        Date: dateStr,
+                        Close: randomClose
+                    });
+                }
+            });
+        });
+
+        // Parse and format all data
+        const data = sampleData.map(d => {
+            const date = typeof d.Date === 'string' ? parseDate(d.Date) : d.Date;
+            return {
+                Date: date,
+                Close: +d.Close
+            };
+        });
+
+        // Sort data by date
+        data.sort((a, b) => a.Date - b.Date);
+
+        // Add year and quarter to each data point
+        data.forEach(d => {
+            const year = d.Date.getFullYear();
+            const month = d.Date.getMonth();
+            let quarter;
+            
+            if (month >= 0 && month <= 2) quarter = 1;
+            else if (month >= 3 && month <= 5) quarter = 2;
+            else if (month >= 6 && month <= 8) quarter = 3;
+            else quarter = 4;
+            
+            d.year = year;
+            d.quarter = quarter;
+            d.yearQuarter = `${year}-Q${quarter}`;
+        });
+
+        // Group by quarter and calculate averages
+        const quarterGroups = d3.group(data, d => d.yearQuarter);
+        
+        const quarterData = Array.from(quarterGroups).map(([yearQuarter, values]) => {
+            const avgClose = d3.mean(values, d => d.Close);
+            const year = values[0].year;
+            const quarter = values[0].quarter;
+            
+            return {
+                yearQuarter: yearQuarter,
+                year: year,
+                quarter: quarter,
+                avgClose: avgClose,
+                count: values.length
+            };
+        });
+
+        // Sort quarter data by year and quarter
+        quarterData.sort((a, b) => {
+            if (a.year !== b.year) return a.year - b.year;
+            return a.quarter - b.quarter;
+        });
+
+        // Create scales for the bar chart
+        const x = d3.scaleBand()
+            .domain(quarterData.map(d => d.yearQuarter))
+            .range([0, width])
+            .padding(0.2);
+        
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(quarterData, d => d.avgClose) * 1.1])
+            .range([height, 0]);
+
+        // Add X axis
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x))
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", ".15em")
+            .attr("transform", "rotate(-45)");
+
+        // Add X axis label
+        svg.append("text")
+            .attr("class", "axis-label")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 10)
+            .style("text-anchor", "middle")
+            .text("Quarter");
+
+        // Add Y axis
+        svg.append("g")
+            .call(d3.axisLeft(y));
+
+        // Add Y axis label
+        svg.append("text")
+            .attr("class", "axis-label")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", -margin.left + 20)
+            .style("text-anchor", "middle")
+            .text("Average Closing Price ($)");
+
+        // Add the title
+        svg.append("text")
+            .attr("class", "chart-title")
+            .attr("x", width / 2)
+            .attr("y", -margin.top / 2)
+            .text("Average Stock Closing Price by Quarter (2013-2016)");
+
+        // Add the Y-axis grid lines
+        svg.append("g")
+            .attr("class", "grid")
+            .call(d3.axisLeft(y)
+                .tickSize(-width)
+                .tickFormat("")
+            );
+
+        // Add year dividers
+        const years_set = new Set(quarterData.map(d => d.year));
+        const unique_years = Array.from(years_set);
+        
+        // Function to find the x position after the last quarter of each year
+        const findYearEnd = (year) => {
+            const lastQuarterOfYear = quarterData.filter(d => d.year === year)
+                .sort((a, b) => b.quarter - a.quarter)[0];
+            
+            return x(lastQuarterOfYear.yearQuarter) + x.bandwidth();
+        };
+
+        // Add year labels at the bottom of the chart
+        unique_years.forEach((year, i) => {
+            if (i < unique_years.length - 1) {
+                const xPos = findYearEnd(year);
+                
+                // Add vertical divider line
+                svg.append("line")
+                    .attr("class", "year-divider")
+                    .attr("x1", xPos)
+                    .attr("y1", 0)
+                    .attr("x2", xPos)
+                    .attr("y2", height);
+            }
+            
+            // Find the middle x position for this year's quarters
+            const yearQuarters = quarterData.filter(d => d.year === year);
+            const startX = x(yearQuarters[0].yearQuarter);
+            const endX = x(yearQuarters[yearQuarters.length-1].yearQuarter) + x.bandwidth();
+            const midX = startX + (endX - startX) / 2;
+            
+            // Add year label
+            svg.append("text")
+                .attr("class", "year-label")
+                .attr("x", midX)
+                .attr("y", height + 50)
+                .text(year);
+        });
+
+        // Add the bars
+        svg.selectAll(".bar")
+            .data(quarterData)
+            .enter().append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.yearQuarter))
+            .attr("width", x.bandwidth())
+            .attr("y", d => y(d.avgClose))
+            .attr("height", d => height - y(d.avgClose))
+            // Add tooltips
+            .append("title")
+            .text(d => `${d.yearQuarter}\nAvg. Close: $${d.avgClose.toFixed(2)}\nData points: ${d.count}`);
+
+        // Add value labels on top of the bars
+        svg.selectAll(".bar-label")
+            .data(quarterData)
+            .enter().append("text")
+            .attr("class", "bar-label")
+            .attr("x", d => x(d.yearQuarter) + x.bandwidth() / 2)
+            .attr("y", d => y(d.avgClose) - 5)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "10px")
+            .text(d => `$${d.avgClose.toFixed(1)}`);
+    </script>
+</body>
+</html>
